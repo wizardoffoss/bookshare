@@ -12,6 +12,8 @@ contract BookSharing {
     mapping(uint256 => Book) private books;
     mapping(address => uint256) private userToBookCount;
     mapping(address => mapping(uint256 => bool)) private userBooks;
+    mapping (address => mapping(uint256 => bool)) private partialTransferMapping;
+    mapping(address => uint256) private noOfPartialTransfers;
     uint256 private bookCount;
 
     event BookAdded(uint256 indexed id, string name, string author);
@@ -31,6 +33,7 @@ contract BookSharing {
         require(userBooks[msg.sender][_id], "You can only remove your own books");
         delete books[_id];
         delete userBooks[msg.sender][_id];
+        userToBookCount[msg.sender]--;
         emit BookRemoved(_id);
     }
 
@@ -38,8 +41,11 @@ contract BookSharing {
         require(userBooks[msg.sender][_bookId], "You can only transfer your own books");
         require(!userBooks[_recipient][_bookId], "Book already belongs to the recipient");
 
-        userBooks[msg.sender][_bookId] = false;
-        userBooks[_recipient][_bookId] = true;
+        //userBooks[msg.sender][_bookId] = false;
+       // userBooks[_recipient][_bookId] = true;
+        //userToBookCount[_recipient]++;
+        partialTransferMapping[_recipient][_bookId] = true;
+        noOfPartialTransfers[_recipient]++;
     }
 
     function getBooksByUser() public view returns (Book[] memory) {
@@ -58,12 +64,17 @@ contract BookSharing {
     }
 
     function getPartiallyTransferredBooks() public view returns (Book[] memory) {
-        uint256 userBookCount = userToBookCount[msg.sender];
-        Book[] memory partiallyTransferredBooks = new Book[](userBookCount);
+        //uint256 userBookCount = userToBookCount[msg.sender];
+        Book[] memory partiallyTransferredBooks = new Book[](noOfPartialTransfers[msg.sender]);
         uint256 counter = 0;
 
         for (uint256 i = 1; i <= bookCount; i++) {
-            if (userBooks[msg.sender][i] && !compareAddresses(msg.sender, books[i].owner)) {
+           /* if (partialTransferMapping[msg.sender][i] && !compareAddresses(msg.sender, books[i].owner)) {
+                partiallyTransferredBooks[counter] = books[i];
+                counter++;
+            } */
+            if (partialTransferMapping[msg.sender][i])
+            {
                 partiallyTransferredBooks[counter] = books[i];
                 counter++;
             }
@@ -73,8 +84,14 @@ contract BookSharing {
     }
 
     function acceptTransfer(uint256 _bookId) public {
-        require(userBooks[msg.sender][_bookId], "You can only accept transfer for partially transferred books");
+        require(partialTransferMapping[msg.sender][_bookId], "You can only accept transfer for partially transferred books");
 
+        userBooks[books[_bookId].owner][_bookId] = false;
+        books[_bookId].owner = msg.sender;
+        userBooks[msg.sender][_bookId] = true;
+        partialTransferMapping[msg.sender][_bookId] = false;
+        noOfPartialTransfers[msg.sender]--;
+        userToBookCount[msg.sender]++;
         books[_bookId].owner = msg.sender;
         emit TransferAccepted(_bookId, msg.sender);
     }
